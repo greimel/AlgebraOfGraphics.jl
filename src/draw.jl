@@ -6,7 +6,7 @@ function apply_alpha_transparency!(attrs::Attributes)
 end
 
 function set_axis_labels!(ax, names)
-    for (nm, prop) in zip(names, (:xlabel, :ylabel, :zlabel))
+    for (nm, prop) in zip(names, (:xlabel, :ylabel))
         s = string(nm)
         if !isempty(s)
             getproperty(ax, prop)[] = s
@@ -91,7 +91,7 @@ function layoutplot!(scene, layout, ts::ElementOrList)
     if !isnothing(layout_x_levels)
         # Facet labels
         lxl = string.(layout_x_levels)
-        @assert length(lxl) == Nx
+        #@assert length(lxl) == Nx
         for i in 1:Nx
             text = LText(scene, lxl[i])
             facetlayout[1, i, Top()] = LRect(
@@ -118,7 +118,7 @@ function layoutplot!(scene, layout, ts::ElementOrList)
     if !isnothing(layout_y_levels)
         # Facet labels
         lyl = string.(layout_y_levels)
-        @assert length(lyl) == Ny
+        #@assert length(lyl) == Ny
         for i in 1:Ny
             text = LText(scene, lyl[i], rotation = -π/2)
             facetlayout[i, end, Right()] = LRect(
