@@ -93,3 +93,27 @@ function create_entrygroups(contentgroups::AbstractArray{<:AbstractArray},
     entrygroups = Vector{EntryGroup}([(t, en) for (t, en) in zip(titles, entries)])
 end
 
+function repl(d, pair)
+    d[pair[1]] = pair[2]
+    d
+end
+
+scatter_defaults = Dict(
+     :marker => :circle, :strokecolor => :transparent, :markerstrokewidth => 1, :color => :black, :markersize => 10 * AbstractPlotting.px)
+     
+defaults_with_replacement(::Type{AbstractPlotting.Scatter}, pair) = repl(scatter_defaults, pair)
+
+defaults_with_replacement(::Type{AbstractPlotting.Lines}, pair) = @error "not yet defined"
+
+legendelement(::Type{AbstractPlotting.Scatter}; kwargs...) = MakieLayout.MarkerElement(; kwargs...)
+
+legendelement(::Type{AbstractPlotting.Lines}; kwargs...) = MakieLayout.LineElement(; kwargs...)
+
+function entry_group(::Type{AbstractPlotting.Scatter}, k, name, min, max) 
+    ticks = MakieLayout.locateticks(min, max, 4)
+    
+    legend_elements = [MakieLayout.MarkerElement(; repl(defaults, k => tick)...) for tick in ticks]
+    
+    create_entrygroups([legend_elements], [string.(ticks)], [string(name)])
+end
+

@@ -118,7 +118,8 @@ function layoutplot!(scene, layout, ts::ElementOrList)
     
     legend = Legend()
     level_dict = Dict{Symbol, Any}()
-    encountered = Set()
+    encountered_pkey = Set()
+    style_dict = Dict{Symbol, Any}()
     for trace in speclist
         pkeys, style, options = trace.pkeys, trace.style, trace.options
         P = plottype(trace)
@@ -126,6 +127,8 @@ function layoutplot!(scene, layout, ts::ElementOrList)
         args, kwargs = split(options)
         names, args = extract_names(args)
         kwnames, _ = extract_names(kwargs)
+        allnames = merge(NamedTuple{Tuple(Symbol.(1:length(names)))}(names), kwnames)
+
         attrs = Attributes(kwargs)
         apply_alpha_transparency!(attrs)
         x_pos = pop!(attrs, :layout_x, 1) |> to_value |> rank
@@ -159,6 +162,8 @@ function layoutplot!(scene, layout, ts::ElementOrList)
         end
         set_axis_labels!(ax, names)
         set_axis_ticks!(ax, ticks)
+        
+        # prepare the legends for categorical variables
         for (k, v) in pairs(pkeys)
             name = get_name(v)
             val = strip_name(v)
@@ -169,26 +174,38 @@ function layoutplot!(scene, layout, ts::ElementOrList)
                 entry = string(only(val))
                 entry_traces = add_entry!(legendsection, entry)
                 # make sure to write at most once on a legend entry per plot type
-                if (P, k, entry) ∉ encountered
+                if (P, k, entry) ∉ encountered_pkey
                     push!(entry_traces, current)
-                    push!(encountered, (P, k, entry))
+                    push!(encountered_pkey, (P, k, entry))
                 end
             end
         end
+        # prepare the legends for continuous variables
+        for (k, dta) in pairs(style.value)
+            name = getproperty(allnames, k)
+            if haskey(style_dict, k)
+                name₀, P₀, min₀, max₀ = style_dict[k]
+                min₁, max₁ = extrema(dta)
+                min_, max_ = min(min₀, min₁), max(max₀, max₁)
+                @assert name₀ == name
+                @assert P₀ == P
+            else
+                min_, max_ = extrema(dta)
+            end
+            style_dict[k] = (name, P, min_, max_)
+        end
+        style_dict
     end
     
+    @show style_dict
     # this holds the legends (one entrygroup for markersize, one for color, ...)
     entrygroups = Vector{EntryGroup}()
     
-    if length(for_markersize) > 0
-      vmin = minimum(first.(for_markersize))
-      vmax = maximum(last.(for_markersize))
-      markersizes = MakieLayout.locateticks(vmin, vmax, 4)
-      
-      group_size = [MakieLayout.MarkerElement(marker = :circle, color = :black, strokecolor = :transparent, markersize = ms * AbstractPlotting.px) for ms in markersizes]
-    
-      append!(entrygroups, create_entrygroups([group_size], [string.(markersizes)], [string(markersizename)]))
-    end
+    # for (k, (name, P, min, max)) in pairs(style_dict)
+    #     if k ∉ (Symbol(1), Symbol(2), :color)
+    #         append!(entrygroups, entry_group(P, k, name, min, max))
+    #     end
+    # end
 
     legend_layout = layout[1, end+1] = GridLayout(tellheight = false)
 
@@ -199,7 +216,7 @@ function layoutplot!(scene, layout, ts::ElementOrList)
             @warn "Automated legend was not possible due to $e"
         end
     end
-
+    #@show entrygroups
     haslegend = length(entrygroups) > 0
     if haslegend
         leg = legend_layout[1, 1] = MakieLayout.LLegend(scene, Node(entrygroups))
