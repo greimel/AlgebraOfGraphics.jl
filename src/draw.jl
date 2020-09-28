@@ -112,16 +112,26 @@ function layoutplot!(scene, layout, ts::ElementOrList)
     end
     hidexdecorations!.(axs[1:end-1, :], grid = false)
     hideydecorations!.(axs[:, 2:end], grid = false)
+    
+    for_colormap = []
+    colorname = nothing
 
+    for_markersize = []
+    markersizename = nothing
+    
     legend = Legend()
     level_dict = Dict{Symbol, Any}()
-    encountered = Set()
+    encountered_pkey = Set()
+    style_dict = Dict{Symbol, Any}()
     for trace in speclist
         pkeys, style, options = trace.pkeys, trace.style, trace.options
         P = plottype(trace)
         P isa Symbol && (P = getproperty(AbstractPlotting, P))
         args, kwargs = split(options)
         names, args = extract_names(args)
+        kwnames, _ = extract_names(kwargs)
+        allnames = merge(NamedTuple{Tuple(Symbol.(1:length(names)))}(names), kwnames)
+
         attrs = Attributes(kwargs)
         apply_alpha_transparency!(attrs)
         x_pos = pop!(attrs, :layout_x, 1) |> to_value |> rank
@@ -137,8 +147,26 @@ function layoutplot!(scene, layout, ts::ElementOrList)
             attrs.width = w
         end
         current = AbstractPlotting.plot!(ax, P, attrs, args...)
+        if hasproperty(style.value, :color)
+            push!(for_colormap, current)
+            if isnothing(colorname)
+                colorname = kwnames.color
+            else
+                @assert colorname == kwnames.color
+            end
+        end
+        if hasproperty(style.value, :markersize)
+            push!(for_markersize, extrema(current[:markersize][]))
+            if isnothing(markersizename)
+                markersizename = kwnames.markersize
+            else
+                @assert markersizename == kwnames.markersize
+            end
+        end
         set_axis_labels!(ax, names)
         set_axis_ticks!(ax, ticks)
+        
+        # prepare the legends for categorical variables
         for (k, v) in pairs(pkeys)
             name = get_name(v)
             val = strip_name(v)
@@ -149,20 +177,65 @@ function layoutplot!(scene, layout, ts::ElementOrList)
                 entry = string(only(val))
                 entry_traces = add_entry!(legendsection, entry)
                 # make sure to write at most once on a legend entry per plot type
-                if (P, k, entry) ∉ encountered
+                if (P, k, entry) ∉ encountered_pkey
                     push!(entry_traces, current)
-                    push!(encountered, (P, k, entry))
+                    push!(encountered_pkey, (P, k, entry))
                 end
             end
         end
+        # prepare the legends for continuous variables
+        for (k, dta) in pairs(style.value)
+            name = getproperty(allnames, k)
+            if haskey(style_dict, k)
+                name₀, P₀, min₀, max₀ = style_dict[k]
+                min₁, max₁ = extrema(dta)
+                min_, max_ = min(min₀, min₁), max(max₀, max₁)
+                @assert name₀ == name
+                @assert P₀ == P
+            else
+                min_, max_ = extrema(dta)
+            end
+            style_dict[k] = (name, P, min_, max_)
+        end
+        style_dict
     end
+    
+    @show style_dict
+    # this holds the legends (one entrygroup for markersize, one for color, ...)
+    entrygroups = Vector{EntryGroup}()
+    
+    # for (k, (name, P, min, max)) in pairs(style_dict)
+    #     if k ∉ (Symbol(1), Symbol(2), :color)
+    #         append!(entrygroups, entry_group(P, k, name, min, max))
+    #     end
+    # end
+
+    legend_layout = layout[1, end+1] = GridLayout(tellheight = false)
+
     if !isempty(legend.sections)
         try
-            layout[1, 2] = create_legend(scene, legend)
+            append!(entrygroups, create_entrygroups(legend))
         catch e
             @warn "Automated legend was not possible due to $e"
         end
     end
+    #@show entrygroups
+    haslegend = length(entrygroups) > 0
+    if haslegend
+        leg = legend_layout[1, 1] = MakieLayout.LLegend(scene, Node(entrygroups))
+        leg.framevisible[] = false
+        leg.tellheight[] = true
+    end
+
+    if length(for_colormap) > 0
+        T = typeof(for_colormap[1])
+        cbar_index = haslegend + 1
+        cbar = legend_layout[cbar_index, 1] = MakieLayout.LColorbar(scene, T[for_colormap...], title=string(colorname), titlevisible=false, width=30, height=120)
+        legend_layout[cbar_index, 1, Top()] = LText(scene, string(colorname), padding = (15,15,15,15))
+    end
+    
+    MakieLayout.trim!(legend_layout)
+    MakieLayout.trim!(layout)
     
     layout_x_levels = get(level_dict, :layout_x, nothing)
     layout_y_levels = get(level_dict, :layout_y, nothing)

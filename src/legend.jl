@@ -33,11 +33,10 @@ function add_entry!(legend::Legend, entry::String; title::String="")
     return add_entry!(names, sections, entry; default=LegendSection(title))
 end
 
-function create_legend(scene, legend::Legend)
+function create_entrygroups(legend::Legend)
     legend = remove_duplicates(legend)
     sections = legend.sections
-    MakieLayout.LLegend(
-        scene,
+    create_entrygroups(
         getproperty.(sections, :plots),
         getproperty.(sections, :names),
         # LLegend needs `nothing` to remove the space for a missing title
@@ -66,3 +65,55 @@ function unique_indices(x; keep)
     inds_keep = findall(==(keep), x)
     sort!(union!(inds_keep, first_inds))
 end
+
+using AbstractPlotting.MakieLayout: Optional, LegendEntry, EntryGroup
+function create_entrygroups(contents::AbstractArray,
+    labels::AbstractArray{String},
+    title::Optional{String} = nothing)
+    
+    if length(contents) != length(labels)
+        error("Number of elements not equal: $(length(contents)) content elements and $(length(labels)) labels.")
+    end
+
+    entries = [LegendEntry(label, content) for (content, label) in zip(contents, labels)]
+    entrygroups = Vector{EntryGroup}([(title, entries)])
+end
+
+function create_entrygroups(contentgroups::AbstractArray{<:AbstractArray},
+    labelgroups::AbstractArray{<:AbstractArray},
+    titles::AbstractArray{<:Optional{String}})
+
+    if !(length(titles) == length(contentgroups) == length(labelgroups))
+    error("Number of elements not equal: $(length(titles)) titles,     $(length(contentgroups)) content groups and $(length(labelgroups)) label     groups.")
+    end
+
+    entries = [[LegendEntry(l, pg) for (l, pg) in zip(labelgroup, contentgroup)]
+        for (labelgroup, contentgroup) in zip(labelgroups, contentgroups)]
+
+    entrygroups = Vector{EntryGroup}([(t, en) for (t, en) in zip(titles, entries)])
+end
+
+function repl(d, pair)
+    d[pair[1]] = pair[2]
+    d
+end
+
+scatter_defaults = Dict(
+     :marker => :circle, :strokecolor => :transparent, :markerstrokewidth => 1, :color => :black, :markersize => 10 * AbstractPlotting.px)
+     
+defaults_with_replacement(::Type{AbstractPlotting.Scatter}, pair) = repl(scatter_defaults, pair)
+
+defaults_with_replacement(::Type{AbstractPlotting.Lines}, pair) = @error "not yet defined"
+
+legendelement(::Type{AbstractPlotting.Scatter}; kwargs...) = MakieLayout.MarkerElement(; kwargs...)
+
+legendelement(::Type{AbstractPlotting.Lines}; kwargs...) = MakieLayout.LineElement(; kwargs...)
+
+function entry_group(::Type{AbstractPlotting.Scatter}, k, name, min, max) 
+    ticks = MakieLayout.locateticks(min, max, 4)
+    
+    legend_elements = [MakieLayout.MarkerElement(; repl(defaults, k => tick)...) for tick in ticks]
+    
+    create_entrygroups([legend_elements], [string.(ticks)], [string(name)])
+end
+
