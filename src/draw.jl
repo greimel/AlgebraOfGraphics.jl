@@ -186,21 +186,20 @@ function layoutplot!(scene, layout, ts::ElementOrList)
         # prepare the legends for continuous variables
         for (k, dta) in pairs(style.value)
             name = getproperty(allnames, k)
-            if haskey(style_dict, k)
+            if haskey(style_dict, k) # encountered
                 name₀, P₀, min₀, max₀ = style_dict[k]
-                min₁, max₁ = extrema(dta)
+                min₁, max₁ = extrema_or_Inf(dta)
                 min_, max_ = min(min₀, min₁), max(max₀, max₁)
                 @assert name₀ == name
                 @assert P₀ == P
             else
-                min_, max_ = extrema(dta)
+                min_, max_ = extrema_or_Inf(dta)
             end
             style_dict[k] = (name, P, min_, max_)
         end
         style_dict
     end
-    
-    @show style_dict
+
     # this holds the legends (one entrygroup for markersize, one for color, ...)
     entrygroups = Vector{EntryGroup}()
     

@@ -39,13 +39,15 @@ function get_attr(c::ContinuousScale, value, extrema)
     @. smin + value * (smax - smin) / (max - min)
 end
 
+extrema_or_Inf(x::AbstractVector) = x isa AbstractVector{<:Number} ? extrema(x) : (Inf, -Inf)
+
 function get_extrema(specs::AbstractVector{<:AbstractElement})
     d = Dict{Symbol, NTuple{2, Float64}}()
     for spec in specs
         style = spec.style
         for (k, val) in pairs(style.value)
             a, b = get(d, k, (Inf, - Inf))
-            a′, b′ = val isa AbstractVector{<:Number} ? extrema(val) : (Inf, -Inf)
+            a′, b′ = extrema_or_Inf(val)
             d[k] = (min(a, a′), max(b, b′))
         end
     end
