@@ -93,7 +93,7 @@ const Geometry = Union{GeometryBasics.AbstractGeometry, GeometryBasics.MultiPoly
 replace_categorical(v::AbstractArray{<:Union{Number, Geometry}}) = (v, automatic)
 replace_categorical(v::Any) = (v, automatic)
 
-function layoutplot!(scene, layout, ts::ElementOrList)
+function layoutplot!(scene, layout, ts::ElementOrList; hidedecorations = false)
     facetlayout = layout[1, 1] = GridLayout()
     speclist = run_pipeline(ts)
     Nx, Ny, Ndodge = 1, 1, 1
@@ -112,6 +112,11 @@ function layoutplot!(scene, layout, ts::ElementOrList)
     end
     hidexdecorations!.(axs[1:end-1, :], grid = false)
     hideydecorations!.(axs[:, 2:end], grid = false)
+    
+    if hidedecorations
+        hidexdecorations!.(axs[:, :])
+        hideydecorations!.(axs[:, :])
+    end
     
     for_colormap = []
     colorname = nothing
