@@ -227,10 +227,27 @@ function layoutplot!(scene, layout, ts::ElementOrList)
     end
 
     if length(for_colormap) > 0
-        T = typeof(for_colormap[1])
+    
+        (name, P, min_, max_) = style_dict[:color]
+        plt = for_colormap[1]
+        cm = plt.colormap
+        colorrange = (min_, max_)
+    
+        cbar = MakieLayout.LColorbar(scene, 
+            colormap = plt.colormap,
+            limits = colorrange,
+            title = string(name),
+            titlevisible = false,
+            width = 30, height = 120,
+            tellheight = true)
         cbar_index = haslegend + 1
-        cbar = legend_layout[cbar_index, 1] = MakieLayout.LColorbar(scene, T[for_colormap...], title=string(colorname), titlevisible=false, width=30, height=120)
+        legend_layout[cbar_index, 1] = cbar
+    
         legend_layout[cbar_index, 1, Top()] = LText(scene, string(colorname), padding = (15,15,15,15))
+    
+        for plt in for_colormap
+          plt.colorrange = colorrange
+        end
     end
     
     MakieLayout.trim!(legend_layout)
